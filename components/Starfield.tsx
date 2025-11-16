@@ -7,59 +7,17 @@ interface StarfieldProps {
   onTargetClick: (target: CelestialObject, screenPos: [number, number]) => void;
   isLeaping: boolean;
   isPaused: boolean;
-  zoomTrigger: { id: string } | null;
   projection: GeoProjection;
 }
 
-const Starfield: React.FC<StarfieldProps> = ({ celestialObjects, onTargetClick, isLeaping, isPaused, zoomTrigger, projection }) => {
+const Starfield: React.FC<StarfieldProps> = ({ celestialObjects, onTargetClick, isLeaping, isPaused, projection }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const animationFrameId = useRef<number>();
   const [isDragging, setIsDragging] = useState(false);
   const [, forceRender] = useState(0);
 
   const memoizedForceRender = useCallback(() => forceRender(c => c + 1), []);
-
-  useEffect(() => {
-    if (zoomTrigger) {
-      const initialScale = projection.scale();
-      const targetScale = initialScale * 1.3;
-      const duration = 200;
-      const startTime = performance.now();
-
-      const zoomAnimation = (currentTime: number) => {
-        const elapsedTime = currentTime - startTime;
-        if (elapsedTime < duration) {
-          const progress = elapsedTime / duration;
-          projection.scale(initialScale + (targetScale - initialScale) * progress);
-          memoizedForceRender();
-          requestAnimationFrame(zoomAnimation);
-        } else {
-          projection.scale(targetScale);
-          memoizedForceRender();
-          
-          setTimeout(() => {
-             const zoomOutStartTime = performance.now();
-             const zoomOutDuration = 300;
-             const zoomOutAnimation = (cout: number) => {
-                const elapsed = cout - zoomOutStartTime;
-                if (elapsed < zoomOutDuration) {
-                    const progress = elapsed / zoomOutDuration;
-                    projection.scale(targetScale - (targetScale - initialScale) * progress);
-                    memoizedForceRender();
-                    requestAnimationFrame(zoomOutAnimation);
-                } else {
-                    projection.scale(initialScale);
-                    memoizedForceRender();
-                }
-             };
-             requestAnimationFrame(zoomOutAnimation);
-          }, 100);
-        }
-      };
-      requestAnimationFrame(zoomAnimation);
-    }
-  }, [zoomTrigger, memoizedForceRender, projection]);
-
+  
   useEffect(() => {
     const resize = () => {
         const width = window.innerWidth;

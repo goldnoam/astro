@@ -16,11 +16,18 @@
         animation: shoot-laser 0.2s linear forwards;
       }
       @keyframes explode {
-        0% { transform: scale(0); opacity: 1; }
-        100% { transform: scale(1); opacity: 0; }
+        0% { transform: translate(0, 0) scale(0.5); opacity: 1; }
+        100% { transform: translate(var(--tx), var(--ty)) scale(1); opacity: 0; }
       }
       .explosion {
-        animation: explode 0.4s ease-out forwards;
+        animation: explode 0.6s ease-out forwards;
+      }
+      @keyframes explosion-flash {
+        0% { transform: scale(0); opacity: 0.9; }
+        100% { transform: scale(1.5); opacity: 0; }
+      }
+      .explosion-flash {
+        animation: explosion-flash 0.3s ease-out forwards;
         transform-origin: center;
       }
       @keyframes leap-effect {

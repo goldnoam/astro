@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { CelestialObject, GalaxyInfo, GameState, LaserEffect, ExplosionEffect, ShipType } from './types';
+import { CelestialObject, GalaxyInfo, GameState, LaserEffect, ExplosionEffect, ShipType, EnemyShip } from './types';
 import { CELESTIAL_OBJECT_COUNT, STAR_COLORS, LASER_COLORS, ENEMY_SCORES, HIGH_SCORE_KEY } from './constants';
 import { generateGalaxyInfo } from './services/geminiService';
 import Starfield from './components/Starfield';
-import { QuantumLeapIcon, TargetIcon, HelpIcon, LaserIcon, EnemyShipIcon, PauseIcon, PlayIcon, SettingsIcon, AsteroidIcon, HealthIcon, AutoAimIcon } from './components/icons';
+import { QuantumLeapIcon, TargetIcon, HelpIcon, LaserIcon, EnemyShipIcon, PauseIcon, PlayIcon, SettingsIcon, AsteroidIcon, HealthIcon, AutoAimIcon, UltraBoostIcon } from './components/icons';
 import { geoOrthographic, GeoProjection } from 'd3';
 
 const MAX_PLAYER_HEALTH = 100;
 const ENEMY_LASER_DAMAGE = 5;
+const MAX_SHIPS = 25;
 
 const generateCelestialObjects = (): CelestialObject[] => {
+  let shipCount = 0;
   return Array.from({ length: CELESTIAL_OBJECT_COUNT }, (_, i) => {
     const typeRand = Math.random();
     const common = {
@@ -17,21 +19,39 @@ const generateCelestialObjects = (): CelestialObject[] => {
       coordinates: [(Math.random() - 0.5) * 360, (Math.random() - 0.5) * 180] as [number, number],
     };
 
-    if (typeRand < 0.20) { // 20% are enemy ships
+    if (typeRand < 0.25 && shipCount < MAX_SHIPS) {
+      shipCount++;
       const rand = Math.random();
       let shipType: ShipType;
       let size: number;
+      let movementPattern: EnemyShip['movementPattern'] = 'static';
+      let velocity: [number, number] = [0, 0];
 
-      if (rand < 0.4) { shipType = 'fighter'; size = Math.random() * 0.5 + 0.8; }
-      else if (rand < 0.6) { shipType = 'interceptor'; size = Math.random() * 0.4 + 0.7; }
-      else if (rand < 0.8) { shipType = 'cruiser'; size = Math.random() * 0.6 + 1.2; }
-      else if (rand < 0.95) { shipType = 'bomber'; size = Math.random() * 0.7 + 1.5; }
-      else { shipType = 'dreadnought'; size = Math.random() * 0.8 + 2.0; }
+      if (rand < 0.4) { 
+        shipType = 'fighter'; 
+        size = Math.random() * 0.5 + 0.8;
+        movementPattern = 'strafe';
+        velocity = [(Math.random() - 0.5) * 0.4, 0];
+      } else if (rand < 0.6) { 
+        shipType = 'interceptor'; 
+        size = Math.random() * 0.4 + 0.7;
+        movementPattern = 'strafe';
+        velocity = [0, (Math.random() - 0.5) * 0.4];
+      } else if (rand < 0.8) { 
+        shipType = 'cruiser'; 
+        size = Math.random() * 0.6 + 1.2;
+      } else if (rand < 0.95) { 
+        shipType = 'bomber'; 
+        size = Math.random() * 0.7 + 1.5;
+      } else { 
+        shipType = 'dreadnought'; 
+        size = Math.random() * 0.8 + 2.0;
+      }
 
-      return { ...common, type: 'ship' as const, id: `ship-${common.id}`, shipType, size };
-    } else if (typeRand < 0.50) { // 30% are asteroids
+      return { ...common, type: 'ship' as const, id: `ship-${common.id}`, shipType, size, movementPattern, velocity };
+    } else if (typeRand < 0.50) {
       return { ...common, type: 'asteroid' as const, id: `asteroid-${common.id}`, size: Math.random() * 1.2 + 0.8 };
-    } else { // 50% are stars
+    } else {
       return { ...common, type: 'star' as const, id: `star-${common.id}`, size: Math.random() * 1.5 + 0.5, color: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)] };
     }
   });
@@ -61,10 +81,10 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
-  const [zoomTrigger, setZoomTrigger] = useState<{id: string} | null>(null);
   const [playerHealth, setPlayerHealth] = useState(MAX_PLAYER_HEALTH);
   const [isAutoAimActive, setIsAutoAimActive] = useState(false);
   const [isPlayerHit, setIsPlayerHit] = useState(false);
+  const [ultraBoostCount, setUltraBoostCount] = useState(5);
   
   const projectionRef = useRef<GeoProjection>(geoOrthographic());
   const shipPosition = useMemo(() => [window.innerWidth / 2, window.innerHeight], []);
@@ -84,6 +104,7 @@ const App: React.FC = () => {
     setPlayerHealth(MAX_PLAYER_HEALTH);
     setIsAutoAimActive(false);
     setEnemyLasers([]);
+    setUltraBoostCount(5);
     if (isRestart) setShowInstructions(false);
 
     const info = await generateGalaxyInfo();
@@ -106,53 +127,76 @@ const App: React.FC = () => {
   }, [playerHealth, gameState]);
 
   useEffect(() => {
-      if (gameState !== GameState.IDLE) return;
+    if (gameState !== GameState.IDLE) return;
 
-      const intervalId = setInterval(() => {
-        const ships = celestialObjects.filter(obj => obj.type === 'ship');
-        if (ships.length === 0) return;
+    const intervalId = setInterval(() => {
+      const ships = celestialObjects.filter(obj => obj.type === 'ship');
+      if (ships.length === 0) return;
 
-        const firingShip = ships[Math.floor(Math.random() * ships.length)];
-        const fromPos = projectionRef.current(firingShip.coordinates);
-        
-        if (!fromPos) return;
-        const [cx, cy] = projectionRef.current.translate();
-        const scale = projectionRef.current.scale();
-        if (Math.sqrt(Math.pow(fromPos[0] - cx, 2) + Math.pow(fromPos[1] - cy, 2)) > scale) return;
+      const firingShip = ships[Math.floor(Math.random() * ships.length)];
+      const fromPos = projectionRef.current(firingShip.coordinates);
+      
+      if (!fromPos) return;
+      const [cx, cy] = projectionRef.current.translate();
+      const scale = projectionRef.current.scale();
+      if (Math.sqrt(Math.pow(fromPos[0] - cx, 2) + Math.pow(fromPos[1] - cy, 2)) > scale) return;
 
-        const id = `enemy-laser-${Date.now()}`;
-        const newLaser: LaserEffect = { id, from: fromPos, to: shipPosition, color: 'red' };
-        setEnemyLasers(prev => [...prev, newLaser]);
+      const id = `enemy-laser-${Date.now()}`;
+      const newLaser: LaserEffect = { id, from: fromPos, to: shipPosition, color: 'red' };
+      setEnemyLasers(prev => [...prev, newLaser]);
 
-        setTimeout(() => {
-            setEnemyLasers(prev => prev.filter(l => l.id !== id));
-            if(gameState !== GameState.LEAPING) { // Don't take damage if leaping
-                setPlayerHealth(h => Math.max(0, h - ENEMY_LASER_DAMAGE));
-                setIsPlayerHit(true);
-                setTimeout(() => setIsPlayerHit(false), 300);
-            }
-        }, 1000); // laser travel time
-      }, 2500 - Math.min(1800, counts.ships * 50)); // fire rate increases with more ships
+      setTimeout(() => {
+          setEnemyLasers(prev => prev.filter(l => l.id !== id));
+          if(gameState !== GameState.LEAPING) {
+              setPlayerHealth(h => Math.max(0, h - ENEMY_LASER_DAMAGE));
+              setIsPlayerHit(true);
+              setTimeout(() => setIsPlayerHit(false), 300);
+          }
+      }, 1000);
+    }, 2500 - Math.min(1800, counts.ships * 50));
 
-      return () => clearInterval(intervalId);
+    return () => clearInterval(intervalId);
   }, [gameState, celestialObjects, shipPosition, counts.ships]);
+  
+  useEffect(() => {
+    let frameId: number;
+    const animateShips = () => {
+        if (gameState === GameState.IDLE) {
+            setCelestialObjects(prev => prev.map(obj => {
+                if (obj.type === 'ship' && obj.movementPattern === 'strafe') {
+                    const [lon, lat] = obj.coordinates;
+                    const [dLon, dLat] = obj.velocity;
+                    let newLon = lon + dLon;
+                    const newLat = lat + dLat;
+                    
+                    // Wrap around longitude
+                    if (newLon > 180) newLon = -180 + (newLon - 180);
+                    if (newLon < -180) newLon = 180 + (newLon + 180);
+                    
+                    // Simple bounce on latitude for strafing
+                    let newVel = obj.velocity;
+                    if (newLat > 85 || newLat < -85) {
+                        newVel = [dLon, -dLat];
+                    }
+                    return { ...obj, coordinates: [newLon, newLat > 85 ? 85 : newLat < -85 ? -85 : newLat], velocity: newVel };
+                }
+                return obj;
+            }));
+        }
+        frameId = requestAnimationFrame(animateShips);
+    };
+    animateShips();
+    return () => cancelAnimationFrame(frameId);
+  }, [gameState]);
 
   const handleQuantumLeap = useCallback(async () => {
     if (gameState !== GameState.IDLE) return;
     setGameState(GameState.LEAPING);
     setTimeout(() => { setupNewGalaxy(true); }, 1500);
   }, [gameState, setupNewGalaxy]);
-  
-  const fireOnTarget = useCallback((target: CelestialObject, screenPos: [number, number]) => {
-      if (gameState !== GameState.IDLE) return;
-      setGameState(GameState.FIRING);
-      setZoomTrigger({id: target.id});
-      setLaser({ id: `laser-${target.id}`, from: shipPosition, to: screenPos, color: LASER_COLORS[laserColorIndex].color });
 
-      setTimeout(() => {
-        setLaser(null);
-        
-        const getExplosionSizeMultiplier = () => {
+  const destroyTarget = useCallback((target: CelestialObject, screenPos: [number, number]) => {
+      const getExplosionSizeMultiplier = () => {
           if (target.type === 'star') return 1; if (target.type === 'asteroid') return 0.8;
           switch (target.shipType) {
             case 'fighter': return 2; case 'interceptor': return 1.8; case 'cruiser': return 4;
@@ -160,35 +204,58 @@ const App: React.FC = () => {
           }
         };
 
-        if (target.type === 'ship') {
-          const points = ENEMY_SCORES[target.shipType];
-          const newScore = score + points;
-          setScore(newScore);
-          if (newScore > highScore) {
-            setHighScore(newScore);
-            localStorage.setItem(HIGH_SCORE_KEY, newScore.toString());
-          }
-        }
-        
-        const fragments = Array.from({ length: 5 + Math.random() * 8 }).map(() => ({
-            size: (target.size * getExplosionSizeMultiplier()) * (Math.random() * 0.4 + 0.6),
-            color: ['#FFA500', '#FF4500', '#FFFF00', '#FFFFFF'][Math.floor(Math.random() * 4)],
-            delay: Math.random() * 0.15,
-        }));
+      if (target.type === 'ship') {
+          setScore(prevScore => {
+              const points = ENEMY_SCORES[target.shipType];
+              const newScore = prevScore + points;
+              if (newScore > highScore) {
+                  setHighScore(newScore);
+                  localStorage.setItem(HIGH_SCORE_KEY, newScore.toString());
+              }
+              return newScore;
+          });
+      }
 
-        const newExplosion: ExplosionEffect = { id: `explosion-${target.id}`, at: screenPos, fragments };
-        setExplosions(prev => [...prev, newExplosion]);
-        setCelestialObjects(prev => prev.filter(s => s.id !== target.id));
+      const fragments = Array.from({ length: 15 + Math.random() * 10 }).map(() => {
+          const angle = Math.random() * 2 * Math.PI;
+          const distance = Math.random() * 50 + 20;
+          return {
+              size: (target.size * getExplosionSizeMultiplier()) * (Math.random() * 0.3 + 0.3),
+              color: ['#FFA500', '#FF4500', '#FFFF00', '#FFFFFF'][Math.floor(Math.random() * 4)],
+              delay: Math.random() * 0.1,
+              tx: Math.cos(angle) * distance,
+              ty: Math.sin(angle) * distance,
+              rotation: Math.random() * 360,
+          };
+      });
 
-        setTimeout(() => setExplosions(prev => prev.filter(e => e.id !== newExplosion.id)), 600);
+      const newExplosion: ExplosionEffect = { 
+          id: `explosion-${target.id}`, 
+          at: screenPos, 
+          fragments,
+          flashSize: target.size * getExplosionSizeMultiplier() * 2,
+      };
+      setExplosions(prev => [...prev, newExplosion]);
+      setCelestialObjects(prev => prev.filter(s => s.id !== target.id));
 
+      setTimeout(() => setExplosions(prev => prev.filter(e => e.id !== newExplosion.id)), 800);
+  }, [highScore]);
+  
+  const fireOnTarget = useCallback((target: CelestialObject, screenPos: [number, number]) => {
+      if (gameState !== GameState.IDLE) return;
+      setGameState(GameState.FIRING);
+      setLaser({ id: `laser-${target.id}`, from: shipPosition, to: screenPos, color: LASER_COLORS[laserColorIndex].color });
+
+      setTimeout(() => {
+        setLaser(null);
+        destroyTarget(target, screenPos);
       }, 200);
 
       setTimeout(() => setGameState(GameState.IDLE), 500);
-  }, [gameState, shipPosition, laserColorIndex, score, highScore]);
+  }, [gameState, shipPosition, laserColorIndex, destroyTarget]);
 
   const handleTargetClick = (target: CelestialObject, screenPos: [number, number]) => {
-    if (isAutoAimActive) return; // Disable manual fire if auto-aim is on
+    if (isAutoAimActive) return;
     fireOnTarget(target, screenPos);
   };
   
@@ -212,7 +279,7 @@ const App: React.FC = () => {
         if (dist < minDistance) { minDistance = dist; closestTarget = h; }
     });
 
-    fireOnTarget(closestTarget.target, closestTarget.screenPos);
+    fireOnTarget(closestTarget.target, closestTarget.screenPos as [number, number]);
   }, [celestialObjects, fireOnTarget, shipPosition]);
 
   useEffect(() => {
@@ -220,6 +287,29 @@ const App: React.FC = () => {
       const autoFireInterval = setInterval(handleAutoFire, 750);
       return () => clearInterval(autoFireInterval);
   }, [isAutoAimActive, gameState, handleAutoFire]);
+  
+  const fireUltraBoost = useCallback(() => {
+    if (gameState !== GameState.IDLE || ultraBoostCount <= 0) return;
+
+    setUltraBoostCount(c => c - 1);
+    setGameState(GameState.FIRING);
+
+    const hostiles = celestialObjects.filter(o => o.type === 'ship');
+    const visibleHostiles = hostiles
+        .map(h => ({ target: h, screenPos: projectionRef.current(h.coordinates) }))
+        .filter(h => {
+            if (!h.screenPos) return false;
+            const [cx, cy] = projectionRef.current.translate();
+            const scale = projectionRef.current.scale();
+            return Math.sqrt(Math.pow(h.screenPos[0] - cx, 2) + Math.pow(h.screenPos[1] - cy, 2)) <= scale;
+        });
+
+    visibleHostiles.forEach((h, i) => {
+        setTimeout(() => destroyTarget(h.target, h.screenPos as [number, number]), i * 50);
+    });
+
+    setTimeout(() => setGameState(GameState.IDLE), 500 + visibleHostiles.length * 50);
+  }, [gameState, ultraBoostCount, celestialObjects, destroyTarget]);
 
   const cycleLaserColor = () => setLaserColorIndex(prev => (prev + 1) % LASER_COLORS.length);
   const togglePause = () => {
@@ -231,7 +321,7 @@ const App: React.FC = () => {
     switch (gameState) {
       case GameState.GENERATING: return 'Generating new galaxy...';
       case GameState.LEAPING: return 'Quantum Leap in progress...';
-      case GameState.FIRING: return 'Lasers firing!';
+      case GameState.FIRING: return 'Weapons active!';
       case GameState.PAUSED: return 'System Paused.';
       case GameState.GAME_OVER: return 'MISSION FAILED.';
       case GameState.IDLE: return 'Awaiting command.';
@@ -247,9 +337,9 @@ const App: React.FC = () => {
       {showInstructions && <Modal title="Commander's Briefing" onClose={() => setShowInstructions(false)}>
           <ul className="space-y-3">
             <li><strong className="text-cyan-400">Rotate/Zoom:</strong> Click & drag / mouse wheel.</li>
-            <li><strong className="text-cyan-400">Manual Fire:</strong> Click on a target. Disabled when Auto-Aim is active.</li>
-            <li><strong className="text-cyan-400">Auto-Aim:</strong> Toggle to automatically fire on the nearest hostile.</li>
-            <li><strong className="text-cyan-400">Watch Your Health:</strong> Avoid enemy fire to survive.</li>
+            <li><strong className="text-cyan-400">Fire:</strong> Click on a target. (Disabled when Auto-Aim is on).</li>
+            <li><strong className="text-cyan-400">Ultra-Boost:</strong> Destroys all visible hostiles. Limited charges.</li>
+            <li><strong className="text-cyan-400">Enemy Movement:</strong> Smaller ships perform evasive maneuvers.</li>
           </ul>
         </Modal>}
       {showSettings && <Modal title="Settings" onClose={() => setShowSettings(false)}>
@@ -265,12 +355,31 @@ const App: React.FC = () => {
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20"></div>
       {isPlayerHit && <div className="absolute inset-0 bg-red-800/80 pointer-events-none z-50 player-hit-flash" />}
       
-      <Starfield celestialObjects={celestialObjects} onTargetClick={handleTargetClick} isLeaping={gameState === GameState.LEAPING} isPaused={gameState === GameState.PAUSED} zoomTrigger={zoomTrigger} projection={projectionRef.current}/>
+      <Starfield celestialObjects={celestialObjects} onTargetClick={handleTargetClick} isLeaping={gameState === GameState.LEAPING} isPaused={gameState === GameState.PAUSED} projection={projectionRef.current}/>
 
       <svg width="100%" height="100%" className="absolute inset-0 pointer-events-none">
         {laser && <line x1={laser.from[0]} y1={laser.from[1]} x2={laser.to[0]} y2={laser.to[1]} stroke={laser.color} strokeWidth="3" className="laser-beam" strokeLinecap="round" />}
         {enemyLasers.map(l => <line key={l.id} x1={l.from[0]} y1={l.from[1]} x2={l.to[0]} y2={l.to[1]} stroke={l.color} strokeWidth="2" strokeDasharray="5 5" className="laser-beam" />)}
-        {explosions.map(exp => <g key={exp.id} transform={`translate(${exp.at[0]}, ${exp.at[1]})`}>{exp.fragments.map((frag, i) => <circle key={i} cx={0} cy={0} r={frag.size * 5} fill={frag.color} className="explosion" style={{ animationDelay: `${frag.delay}s` }} />)}</g>)}
+        {explosions.map(exp => 
+          <g key={exp.id} transform={`translate(${exp.at[0]}, ${exp.at[1]})`}>
+            <circle cx="0" cy="0" r={exp.flashSize} fill="white" className="explosion-flash" />
+            {exp.fragments.map((frag, i) => 
+              <line 
+                key={i} 
+                x1={0} y1={0} x2={frag.size} y2={0} 
+                stroke={frag.color} 
+                strokeWidth="2" 
+                className="explosion"
+                style={{
+                  '--tx': `${frag.tx}px`,
+                  '--ty': `${frag.ty}px`,
+                  transform: `rotate(${frag.rotation}deg)`,
+                  animationDelay: `${frag.delay}s`,
+                } as React.CSSProperties}
+              />
+            )}
+          </g>
+        )}
       </svg>
       
       <header className="absolute top-0 left-0 p-4 md:p-6 text-cyan-300 pointer-events-none w-full flex justify-between items-start">
@@ -284,7 +393,7 @@ const App: React.FC = () => {
       </div>
 
       <footer className="absolute bottom-0 left-0 w-full p-4 flex flex-col items-center">
-        <div className="bg-black/50 backdrop-blur-sm border border-cyan-500/50 rounded-lg p-3 flex flex-col items-center justify-center space-y-3 shadow-2xl shadow-cyan-500/20 w-full max-w-2xl">
+        <div className="bg-black/50 backdrop-blur-sm border border-cyan-500/50 rounded-lg p-3 flex flex-col items-center justify-center space-y-3 shadow-2xl shadow-cyan-500/20 w-full max-w-3xl">
           <div className="flex items-center justify-around w-full text-center">
              <div className="flex flex-col items-center w-20"><TargetIcon className="h-5 w-5 text-cyan-300 mb-1"/><span className="text-sm font-bold">{counts.stars}</span><span className="text-[10px] uppercase text-cyan-400/80">Stars</span></div>
              <div className="flex flex-col items-center w-20"><AsteroidIcon className="h-5 w-5 text-gray-400 mb-1"/><span className="text-sm font-bold">{counts.asteroids}</span><span className="text-[10px] uppercase text-gray-400/80">Asteroids</span></div>
@@ -295,6 +404,7 @@ const App: React.FC = () => {
           <div className="w-full h-[1px] bg-cyan-500/30"></div>
           <div className="flex items-center justify-center space-x-2 md:space-x-4 w-full">
             <button onClick={handleQuantumLeap} disabled={gameState !== GameState.IDLE} className="px-3 py-2 bg-cyan-500 text-black font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center space-x-2 shadow-lg shadow-cyan-500/50 text-sm"><QuantumLeapIcon className="h-5 w-5"/><span>Leap</span></button>
+            <button onClick={fireUltraBoost} disabled={gameState !== GameState.IDLE || ultraBoostCount <= 0} className="px-3 py-2 bg-yellow-500 text-black font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center space-x-2 shadow-lg shadow-yellow-500/50 text-sm"><UltraBoostIcon className="h-5 w-5"/><span>Boost ({ultraBoostCount})</span></button>
             <button onClick={cycleLaserColor} disabled={gameState !== GameState.IDLE} style={{ color: LASER_COLORS[laserColorIndex].color }} className="px-3 py-2 bg-gray-800 border border-gray-600 font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center space-x-2 text-sm"><LaserIcon className="h-5 w-5"/><span className="hidden sm:inline">{LASER_COLORS[laserColorIndex].name}</span></button>
             <button onClick={() => setIsAutoAimActive(a => !a)} disabled={gameState !== GameState.IDLE && gameState !== GameState.PAUSED} className={`px-3 py-2 border font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center space-x-2 text-sm ${isAutoAimActive ? 'bg-green-500 text-black border-green-400' : 'bg-gray-800 text-white border-gray-600'}`}><AutoAimIcon className="h-5 w-5"/><span>Auto-Aim</span></button>
             <button onClick={togglePause} disabled={gameState !== GameState.IDLE && gameState !== GameState.PAUSED} className="px-3 py-2 bg-gray-800 border border-gray-600 font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 text-white"><span className="sr-only">Pause/Resume</span>{gameState === GameState.PAUSED ? <PlayIcon className="h-5 w-5" /> : <PauseIcon className="h-5 w-5" />}</button>

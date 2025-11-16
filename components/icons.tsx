@@ -73,3 +73,9 @@ export const AutoAimIcon: React.FC<{ className?: string }> = ({ className }) => 
         <path d="M12 5V3"/>
     </svg>
 );
+
+export const UltraBoostIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2.69l5.66 5.66-1.42 1.42L13 6.5V12h-2V6.5L7.76 9.77 6.34 8.35 12 2.69zM4.5 13.5c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2v-2c0-1.1-.9-2-2-2h-3.5v-2H8v2H4.5z"/>
+    </svg>
+);

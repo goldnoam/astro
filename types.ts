@@ -14,6 +14,8 @@ export interface EnemyShip {
   coordinates: [number, number];
   size: number;
   shipType: ShipType;
+  movementPattern: 'static' | 'strafe';
+  velocity: [number, number]; // [d_longitude, d_latitude]
 }
 
 export interface Asteroid {
@@ -51,5 +53,13 @@ export interface LaserEffect {
 export interface ExplosionEffect {
   id: string;
   at: [number, number];
-  fragments: { size: number; color: string; delay: number }[];
+  fragments: {
+    size: number;
+    color: string;
+    delay: number;
+    tx: number; // target x for translate
+    ty: number; // target y for translate
+    rotation: number;
+  }[];
+  flashSize: number;
 }
