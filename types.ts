@@ -15,8 +15,9 @@ export interface EnemyShip {
   coordinates: [number, number];
   size: number;
   shipType: ShipType;
-  movementPattern: 'static' | 'strafe';
+  movementPattern: 'static' | 'strafe' | 'flank';
   velocity: [number, number]; // [d_longitude, d_latitude]
+  flankDirection?: 'cw' | 'ccw';
 }
 
 export interface Asteroid {

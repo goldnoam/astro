@@ -8,10 +8,11 @@ import { geoOrthographic, GeoProjection } from 'd3';
 
 const MAX_PLAYER_HEALTH = 100;
 const ENEMY_LASER_DAMAGE = 5;
-const MAX_SHIPS = 25;
 
 const generateCelestialObjects = (level: number): CelestialObject[] => {
   let shipCount = 0;
+  const maxShipsForLevel = Math.floor(Math.random() * 20) + 4; // Random hostiles from 4 to 23
+
   return Array.from({ length: CELESTIAL_OBJECT_COUNT }, (_, i) => {
     const typeRand = Math.random();
     const common = {
@@ -19,13 +20,14 @@ const generateCelestialObjects = (level: number): CelestialObject[] => {
       coordinates: [(Math.random() - 0.5) * 360, (Math.random() - 0.5) * 180] as [number, number],
     };
 
-    if (typeRand < 0.25 && shipCount < MAX_SHIPS) {
+    if (typeRand < 0.25 && shipCount < maxShipsForLevel) {
       shipCount++;
       const rand = Math.random();
       let shipType: ShipType;
       let size: number;
       let movementPattern: EnemyShip['movementPattern'] = 'static';
       let velocity: [number, number] = [0, 0];
+      let flankDirection: EnemyShip['flankDirection'] | undefined = undefined;
       
       const useMk2Ships = level > 1;
 
@@ -37,8 +39,8 @@ const generateCelestialObjects = (level: number): CelestialObject[] => {
       } else if (rand < 0.6) { 
         shipType = useMk2Ships ? 'interceptor-mk2' : 'interceptor'; 
         size = Math.random() * 0.4 + 0.7;
-        movementPattern = 'strafe';
-        velocity = [0, (Math.random() - 0.5) * 0.4];
+        movementPattern = 'flank';
+        flankDirection = Math.random() < 0.5 ? 'cw' : 'ccw';
       } else if (rand < 0.8) { 
         shipType = useMk2Ships ? 'cruiser-mk2' : 'cruiser'; 
         size = Math.random() * 0.6 + 1.2;
@@ -50,7 +52,7 @@ const generateCelestialObjects = (level: number): CelestialObject[] => {
         size = Math.random() * 0.8 + 2.0;
       }
 
-      return { ...common, type: 'ship' as const, id: `ship-${common.id}`, shipType, size, movementPattern, velocity };
+      return { ...common, type: 'ship' as const, id: `ship-${common.id}`, shipType, size, movementPattern, velocity, flankDirection };
     } else if (typeRand < 0.50) {
       return { ...common, type: 'asteroid' as const, id: `asteroid-${common.id}`, size: Math.random() * 1.2 + 0.8 };
     } else {
@@ -180,7 +182,9 @@ const App: React.FC = () => {
     const animateShips = () => {
         if (gameState === GameState.IDLE) {
             setCelestialObjects(prev => prev.map(obj => {
-                if (obj.type === 'ship' && obj.movementPattern === 'strafe') {
+                if (obj.type !== 'ship') return obj;
+
+                if (obj.movementPattern === 'strafe') {
                     const [lon, lat] = obj.coordinates;
                     const [dLon, dLat] = obj.velocity;
                     let newLon = lon + dLon;
@@ -194,6 +198,28 @@ const App: React.FC = () => {
                         newVel = [dLon, -dLat];
                     }
                     return { ...obj, coordinates: [newLon, newLat > 85 ? 85 : newLat < -85 ? -85 : newLat], velocity: newVel };
+                } else if (obj.movementPattern === 'flank') {
+                    const [lon, lat] = obj.coordinates;
+                    const r = Math.sqrt(lon**2 + lat**2);
+                    if (r === 0) return { ...obj, coordinates: [0.1, 0] }; // Nudge if at origin
+                    
+                    const theta = Math.atan2(lat, lon);
+                    const angularSpeed = 0.005;
+                    
+                    const newTheta = theta + (obj.flankDirection === 'cw' ? -angularSpeed : angularSpeed);
+                    
+                    let newLon = r * Math.cos(newTheta);
+                    let newLat = r * Math.sin(newTheta);
+                    
+                    // CRITICAL FIX: This cartesian-on-polar math can produce invalid latitudes.
+                    // Clamp the latitude to the valid [-90, 90] range to prevent crashes.
+                    newLat = Math.max(-90, Math.min(90, newLat));
+
+                    // Wrap longitude to keep it in [-180, 180]
+                    if (newLon > 180) newLon -= 360;
+                    if (newLon < -180) newLon += 360;
+
+                    return { ...obj, coordinates: [newLon, newLat] };
                 }
                 return obj;
             }));
@@ -230,7 +256,7 @@ const App: React.FC = () => {
 
       if (target.type === 'ship') {
           setScore(prevScore => {
-              const points = ENEMY_SCORES[target.shipType];
+              const points = ENEMY_SCORES[(target as EnemyShip).shipType];
               const newScore = prevScore + points;
               if (newScore > highScore) {
                   setHighScore(newScore);
