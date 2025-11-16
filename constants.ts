@@ -10,7 +10,7 @@ export const LASER_COLORS = [
 export const HIGH_SCORE_KEY = 'us-spagettini-high-score';
 export const AUDIO_VOLUME_KEY = 'us-spagettini-volume';
 export const LANGUAGE_KEY = 'us-spagettini-language';
-export const HEALTH_REWARD = 10;
+export const HEALTH_REWARD = 1;
 export const BOOST_REWARD = 1;
 export const ENEMY_SCORES: Record<ShipType, number> = {
     fighter: 10,

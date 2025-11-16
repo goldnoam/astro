@@ -8,8 +8,9 @@ import { geoOrthographic, GeoProjection } from 'd3';
 import useAudio from './hooks/useAudio';
 import useLocalization from './hooks/useLocalization';
 
-const MAX_PLAYER_HEALTH = 100;
-const ENEMY_LASER_DAMAGE = 5;
+const INITIAL_PLAYER_LIVES = 5;
+const MAX_PLAYER_LIVES = 10;
+const ENEMY_LASER_DAMAGE = 1;
 
 const generateCelestialObjects = (level: number): CelestialObject[] => {
   let shipCount = 0;
@@ -92,7 +93,7 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
-  const [playerHealth, setPlayerHealth] = useState(MAX_PLAYER_HEALTH);
+  const [playerHealth, setPlayerHealth] = useState(INITIAL_PLAYER_LIVES);
   const [isPlayerHit, setIsPlayerHit] = useState(false);
   const [ultraBoostCount, setUltraBoostCount] = useState(5);
   const [level, setLevel] = useState(1);
@@ -123,7 +124,7 @@ const App: React.FC = () => {
       setUltraBoostCount(5);
       setShowInstructions(false);
       // Health is only restored at the start of a new game.
-      setPlayerHealth(MAX_PLAYER_HEALTH);
+      setPlayerHealth(INITIAL_PLAYER_LIVES);
     } else {
       setLevel(levelToGenerate);
     }
@@ -279,7 +280,7 @@ const App: React.FC = () => {
               playSound('explosion');
               break;
           case 'heart_star':
-              setPlayerHealth(h => Math.min(MAX_PLAYER_HEALTH, h + HEALTH_REWARD));
+              setPlayerHealth(h => Math.min(MAX_PLAYER_LIVES, h + HEALTH_REWARD));
               explosionColors = ['#FF1493', '#FFC0CB', '#FFFFFF'];
               explosionSizeMultiplier = 2;
               playSound('powerup');
@@ -484,7 +485,14 @@ const App: React.FC = () => {
           </div>
            <div className="w-full h-[1px] bg-cyan-500/30"></div>
            <div className="flex flex-col md:flex-row items-center justify-between w-full space-y-2 md:space-y-0 md:space-x-4">
-              <div className="flex items-center space-x-2 text-green-400 w-full md:w-auto"><HealthIcon className="h-5 w-5" /><div className="flex-1 h-4 bg-gray-800 border border-green-700 rounded-full overflow-hidden"><div className="h-full bg-green-500 transition-all duration-300" style={{width: `${(playerHealth / MAX_PLAYER_HEALTH) * 100}%`}}></div></div></div>
+              <div className="flex items-center space-x-1 w-full md:w-auto h-6">
+                  {Array.from({ length: playerHealth }).map((_, i) => (
+                      <HealthIcon key={i} className="h-5 w-5 text-pink-400" />
+                  ))}
+                  {Array.from({ length: Math.max(0, MAX_PLAYER_LIVES - playerHealth) }).map((_, i) => (
+                      <HealthIcon key={`empty-${i}`} className="h-5 w-5 text-gray-700" />
+                  ))}
+              </div>
               <div className="text-center w-full md:w-36 flex-shrink-0"><p className="text-xs text-white truncate">{statusMessage}</p><div className="h-1 w-full bg-cyan-900/50 mt-1 rounded-full overflow-hidden"><div className={`h-1 bg-cyan-400 transition-all duration-300 ${gameState === GameState.IDLE || gameState === GameState.PAUSED ? 'w-full' : 'w-0'}`}></div></div><span className="text-[10px] uppercase text-cyan-400/80">{t('systemStatus')}</span></div>
            </div>
         </div>
