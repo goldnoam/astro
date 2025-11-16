@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Starship Commander: Galaxy Destroyer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @keyframes shoot-laser {
+        0% { stroke-dashoffset: 1000; }
+        100% { stroke-dashoffset: 0; }
+      }
+      .laser-beam {
+        stroke-dasharray: 1000;
+        animation: shoot-laser 0.2s linear forwards;
+      }
+      @keyframes explode {
+        0% { transform: scale(0); opacity: 1; }
+        100% { transform: scale(1); opacity: 0; }
+      }
+      .explosion {
+        animation: explode 0.4s ease-out forwards;
+        transform-origin: center;
+      }
+      @keyframes leap-effect {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(20); opacity: 0.5; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      .quantum-leap {
+        animation: leap-effect 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      }
+      @keyframes screen-shake {
+        0% { transform: translate(1px, 1px) rotate(0deg); }
+        10% { transform: translate(-1px, -2px) rotate(-1deg); }
+        20% { transform: translate(-3px, 0px) rotate(1deg); }
+        30% { transform: translate(3px, 2px) rotate(0deg); }
+        40% { transform: translate(1px, -1px) rotate(1deg); }
+        50% { transform: translate(-1px, 2px) rotate(-1deg); }
+        60% { transform: translate(-3px, 1px) rotate(0deg); }
+        70% { transform: translate(3px, 1px) rotate(-1deg); }
+        80% { transform: translate(-1px, -1px) rotate(1deg); }
+        90% { transform: translate(1px, 2px) rotate(0deg); }
+        100% { transform: translate(0, 0) rotate(0deg); }
+      }
+      .screen-shake {
+        animation: screen-shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+      }
+      @keyframes player-hit-flash {
+        0% { opacity: 0.5; }
+        100% { opacity: 0; }
+      }
+      .player-hit-flash {
+        animation: player-hit-flash 0.3s ease-out forwards;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.1",
+    "d3": "https://aistudiocdn.com/d3@^7.9.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-black text-white overflow-hidden">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
