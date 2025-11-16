@@ -165,7 +165,7 @@ const Starfield: React.FC<StarfieldProps> = ({ celestialObjects, onTargetClick, 
             case 'heart_star':
                 const sHeart = target.size * 1.5;
                 element = (
-                    <g className="heart-pulse">
+                    <g>
                         <circle r={sHeart * 2} fill="url(#heartGlow)" className="opacity-70 group-hover:opacity-100 transition-opacity" />
                         <path d={`M0,${-sHeart*0.5} C ${sHeart},${-sHeart*2} ${sHeart*2},${-sHeart*1.5} 0,${sHeart*1.5} C ${-sHeart*2},${-sHeart*1.5} ${-sHeart},${-sHeart*2} 0,${-sHeart*0.5} Z`} fill="#FF1493" stroke="#FF85B2" strokeWidth="0.5" />
                     </g>

@@ -6,6 +6,7 @@ import Starfield from './components/Starfield';
 import { QuantumLeapIcon, TargetIcon, HelpIcon, LaserIcon, EnemyShipIcon, PauseIcon, PlayIcon, SettingsIcon, AsteroidIcon, HealthIcon, UltraBoostIcon, VolumeUpIcon, VolumeMuteIcon } from './components/icons';
 import { geoOrthographic, GeoProjection } from 'd3';
 import useAudio from './hooks/useAudio';
+import useLocalization from './hooks/useLocalization';
 
 const MAX_PLAYER_HEALTH = 100;
 const ENEMY_LASER_DAMAGE = 5;
@@ -66,19 +67,20 @@ const generateCelestialObjects = (level: number): CelestialObject[] => {
   });
 };
 
-const Modal: React.FC<{ title: string, onClose: () => void, children: React.ReactNode, actions?: React.ReactNode }> = ({ title, onClose, children, actions }) => (
+const Modal: React.FC<{ title: string, onClose: () => void, children: React.ReactNode, actions?: React.ReactNode, closeText: string }> = ({ title, onClose, children, actions, closeText }) => (
     <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-gray-900 border border-cyan-400 p-6 rounded-lg max-w-md w-full text-white shadow-2xl shadow-cyan-500/30" onClick={e => e.stopPropagation()}>
         <h2 className="text-2xl font-bold text-cyan-300 mb-4">{title}</h2>
         {children}
         <div className="mt-6 flex gap-2">
-            {actions || <button onClick={onClose} className="w-full bg-cyan-500 text-black font-bold py-2 rounded-lg hover:bg-cyan-400 transition-colors">Close</button>}
+            {actions || <button onClick={onClose} className="w-full bg-cyan-500 text-black font-bold py-2 rounded-lg hover:bg-cyan-400 transition-colors">{closeText}</button>}
         </div>
       </div>
     </div>
 );
 
 const App: React.FC = () => {
+  const { t, setLanguage, language, languages, dir } = useLocalization();
   const [celestialObjects, setCelestialObjects] = useState<CelestialObject[]>([]);
   const [galaxyInfo, setGalaxyInfo] = useState<GalaxyInfo | null>(null);
   const [gameState, setGameState] = useState<GameState>(GameState.GENERATING);
@@ -105,6 +107,10 @@ const App: React.FC = () => {
       asteroids: celestialObjects.filter(o => o.type === 'asteroid').length
   }), [celestialObjects]);
 
+  const localizedLaserColors = useMemo(() =>
+    LASER_COLORS.map(lc => ({...lc, name: t(lc.nameKey)})),
+  [t]);
+
   const setupNewGalaxy = useCallback(async (levelToGenerate: number, isRestart = false) => {
     setGameState(GameState.GENERATING);
     setCelestialObjects([]);
@@ -116,12 +122,11 @@ const App: React.FC = () => {
       setScore(0);
       setUltraBoostCount(5);
       setShowInstructions(false);
+      // Health is only restored at the start of a new game.
+      setPlayerHealth(MAX_PLAYER_HEALTH);
     } else {
       setLevel(levelToGenerate);
     }
-
-    // Health is now restored at the start of every level.
-    setPlayerHealth(MAX_PLAYER_HEALTH);
 
     const info = await generateGalaxyInfo();
     setGalaxyInfo(info);
@@ -318,7 +323,7 @@ const App: React.FC = () => {
       if (gameState !== GameState.IDLE) return;
       playSound('laserPlayer');
       setGameState(GameState.FIRING);
-      setLaser({ id: `laser-${target.id}`, from: shipPosition, to: screenPos, color: LASER_COLORS[laserColorIndex].color });
+      setLaser({ id: `laser-${target.id}`, from: shipPosition, to: screenPos, color: localizedLaserColors[laserColorIndex].color });
 
       setTimeout(() => {
         setLaser(null);
@@ -326,7 +331,7 @@ const App: React.FC = () => {
       }, 200);
 
       setTimeout(() => setGameState(GameState.IDLE), 500);
-  }, [gameState, shipPosition, laserColorIndex, destroyTarget, playSound]);
+  }, [gameState, shipPosition, laserColorIndex, destroyTarget, playSound, localizedLaserColors]);
   
   const fireUltraBoost = useCallback(() => {
     if (gameState !== GameState.IDLE || ultraBoostCount <= 0) return;
@@ -357,7 +362,7 @@ const App: React.FC = () => {
 
   const cycleLaserColor = () => {
       playSound('uiClick');
-      setLaserColorIndex(prev => (prev + 1) % LASER_COLORS.length);
+      setLaserColorIndex(prev => (prev + 1) % localizedLaserColors.length);
   }
   const togglePause = () => {
       playSound('uiClick');
@@ -367,34 +372,36 @@ const App: React.FC = () => {
 
   const statusMessage = useMemo(() => {
     switch (gameState) {
-      case GameState.GENERATING: return 'Generating new galaxy...';
-      case GameState.LEAPING: return 'Quantum Leap in progress...';
-      case GameState.FIRING: return 'Weapons active!';
-      case GameState.PAUSED: return 'System Paused.';
-      case GameState.GAME_OVER: return 'MISSION FAILED.';
-      case GameState.IDLE: return counts.ships > 0 ? 'Awaiting command.' : 'Sector clear! Advancing...';
-      default: return 'Standby.';
+      case GameState.GENERATING: return t('statusGenerating');
+      case GameState.LEAPING: return t('statusLeaping');
+      case GameState.FIRING: return t('statusFiring');
+      case GameState.PAUSED: return t('statusPaused');
+      case GameState.GAME_OVER: return t('statusGameOver');
+      case GameState.IDLE: return counts.ships > 0 ? t('statusIdleHostiles') : t('statusIdleClear');
+      default: return t('statusStandby');
     }
-  }, [gameState, counts.ships]);
+  }, [gameState, counts.ships, t]);
 
   return (
-    <div className={`h-screen w-screen bg-black overflow-hidden relative font-mono ${isPlayerHit ? 'screen-shake' : ''}`}>
-      {gameState === GameState.GAME_OVER && <Modal title="Mission Failed" onClose={() => {}} actions={<button onClick={() => { playSound('uiClick'); setupNewGalaxy(1, true); }} className="w-full bg-green-500 text-black font-bold py-2 rounded-lg hover:bg-green-400 transition-colors">Restart Mission</button>}>
-          <p>Your ship has been destroyed. Your final score was <strong className="text-green-400">{score}</strong> on level <strong className="text-cyan-400">{level}</strong>.</p>
+    <div dir={dir} className={`h-screen w-screen bg-black overflow-hidden relative font-mono ${isPlayerHit ? 'screen-shake' : ''}`}>
+      {gameState === GameState.GAME_OVER && <Modal title={t('missionFailed')} onClose={() => {}} closeText={t('close')} actions={<button onClick={() => { playSound('uiClick'); setupNewGalaxy(1, true); }} className="w-full bg-green-500 text-black font-bold py-2 rounded-lg hover:bg-green-400 transition-colors">{t('restartMission')}</button>}>
+          <p>{t('missionFailedBody', { score: score, level: level }).replace('{{score}}', '').replace('{{level}}', '')}
+             <strong className="text-green-400">{score}</strong> on level <strong className="text-cyan-400">{level}</strong>.
+          </p>
         </Modal>}
-      {showInstructions && <Modal title="Commander's Briefing" onClose={() => { playSound('uiClick'); setShowInstructions(false); }}>
+      {showInstructions && <Modal title={t('commandersBriefing')} onClose={() => { playSound('uiClick'); setShowInstructions(false); }} closeText={t('close')}>
           <ul className="space-y-3">
-            <li><strong className="text-cyan-400">Objective:</strong> Clear all hostile ships to advance to the next level.</li>
-            <li><strong className="text-cyan-400">Controls:</strong> Tap/Click & drag to rotate, mouse wheel to zoom.</li>
-            <li><strong className="text-cyan-400">Fire:</strong> Tap/Click on a target.</li>
-            <li><strong className="text-cyan-400">Power-ups:</strong> Destroy pink hearts for health and gold stars for extra boosts.</li>
-            <li><strong className="text-cyan-400">Ultra-Boost:</strong> Destroys all visible hostiles. Limited charges.</li>
+            <li><strong className="text-cyan-400">{t('objective')}</strong> {t('objectiveText')}</li>
+            <li><strong className="text-cyan-400">{t('controls')}</strong> {t('controlsText')}</li>
+            <li><strong className="text-cyan-400">{t('fire')}</strong> {t('fireText')}</li>
+            <li><strong className="text-cyan-400">{t('powerups')}</strong> {t('powerupsText')}</li>
+            <li><strong className="text-cyan-400">{t('ultraBoost')}</strong> {t('ultraBoostText')}</li>
           </ul>
         </Modal>}
-      {showSettings && <Modal title="Settings" onClose={() => { playSound('uiClick'); setShowSettings(false); }}>
+      {showSettings && <Modal title={t('settings')} onClose={() => { playSound('uiClick'); setShowSettings(false); }} closeText={t('close')}>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-cyan-300 mb-2">Master Volume</label>
+            <label className="block text-sm font-medium text-cyan-300 mb-2">{t('masterVolume')}</label>
             <div className="flex items-center space-x-2">
                 <VolumeMuteIcon className="h-6 w-6 text-cyan-400" />
                 <input
@@ -410,9 +417,12 @@ const App: React.FC = () => {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-cyan-300">Language</label>
-            <select className="mt-1 block w-full pl-3 pr-10 py-2 bg-gray-800 border-gray-600 rounded-md focus:outline-none focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm">
-                <option>English</option><option disabled>Español (Coming Soon)</option>
+            <label className="block text-sm font-medium text-cyan-300">{t('language')}</label>
+            <select value={language} onChange={e => setLanguage(e.target.value as keyof typeof languages)} className="mt-1 block w-full pl-3 pr-10 py-2 bg-gray-800 border-gray-600 rounded-md focus:outline-none focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm">
+                {/* FIX: Add explicit type annotation for the destructured map parameter to resolve type inference issue. */}
+                {Object.entries(languages).map(([code, {name}]: [string, {name: string}]) => 
+                    <option key={code} value={code}>{name}</option>
+                )}
             </select>
           </div>
         </div>
@@ -450,36 +460,36 @@ const App: React.FC = () => {
       </svg>
       
       <header className="absolute top-0 left-0 p-4 md:p-6 text-cyan-300 pointer-events-none w-full flex justify-between items-start">
-        <div><h1 className="text-xl md:text-3xl font-bold tracking-widest uppercase">U.S. Spagettini</h1><p className="text-sm md:text-base text-white/80">Level: {level}</p></div>
-        <div className='text-right'><p className="text-lg md:text-xl font-semibold">{galaxyInfo ? galaxyInfo.name : 'Scanning...'}</p><p className="text-xs md:text-sm max-w-[150px] sm:max-w-xs text-white/70 italic">{galaxyInfo ? galaxyInfo.description : ''}</p></div>
+        <div><h1 className="text-xl md:text-3xl font-bold tracking-widest uppercase">{t('shipName')}</h1><p className="text-sm md:text-base text-white/80">{t('level', {level})}</p></div>
+        <div className='text-right'><p className="text-lg md:text-xl font-semibold">{galaxyInfo ? galaxyInfo.name : t('scanning')}</p><p className="text-xs md:text-sm max-w-[150px] sm:max-w-xs text-white/70 italic">{galaxyInfo ? galaxyInfo.description : ''}</p></div>
       </header>
 
       <footer className="absolute bottom-0 left-0 w-full p-4 flex flex-col items-center">
         <div className="bg-black/50 backdrop-blur-sm border border-cyan-500/50 rounded-lg p-3 flex flex-col items-center justify-center space-y-3 shadow-2xl shadow-cyan-500/20 w-full max-w-3xl">
           <div className="flex items-start justify-around w-full text-center">
-             <div className="flex flex-col items-center flex-1 min-w-0 px-1"><TargetIcon className="h-5 w-5 text-cyan-300 mb-1"/><span className="text-xs sm:text-sm font-bold">{counts.stars}</span><span className="text-[9px] sm:text-[10px] uppercase text-cyan-400/80">Stars</span></div>
-             <div className="flex flex-col items-center flex-1 min-w-0 px-1"><AsteroidIcon className="h-5 w-5 text-gray-400 mb-1"/><span className="text-xs sm:text-sm font-bold">{counts.asteroids}</span><span className="text-[9px] sm:text-[10px] uppercase text-gray-400/80">Asteroids</span></div>
-             <div className="flex flex-col items-center flex-1 min-w-0 px-1"><EnemyShipIcon className="h-5 w-5 text-red-400 mb-1"/><span className="text-xs sm:text-sm font-bold">{counts.ships}</span><span className="text-[9px] sm:text-[10px] uppercase text-red-400/80">Hostiles</span></div>
-             <div className="flex flex-col items-center flex-1 min-w-0 px-1"><span className="text-xs sm:text-sm font-bold">{score}</span><span className="text-[9px] sm:text-[10px] uppercase text-green-400/80">Score</span></div>
-             <div className="flex flex-col items-center flex-1 min-w-0 px-1"><span className="text-xs sm:text-sm font-bold">{highScore}</span><span className="text-[9px] sm:text-[10px] uppercase text-yellow-400/80">High Score</span></div>
+             <div className="flex flex-col items-center flex-1 min-w-0 px-1"><TargetIcon className="h-5 w-5 text-cyan-300 mb-1"/><span className="text-xs sm:text-sm font-bold">{counts.stars}</span><span className="text-[9px] sm:text-[10px] uppercase text-cyan-400/80">{t('stars')}</span></div>
+             <div className="flex flex-col items-center flex-1 min-w-0 px-1"><AsteroidIcon className="h-5 w-5 text-gray-400 mb-1"/><span className="text-xs sm:text-sm font-bold">{counts.asteroids}</span><span className="text-[9px] sm:text-[10px] uppercase text-gray-400/80">{t('asteroids')}</span></div>
+             <div className="flex flex-col items-center flex-1 min-w-0 px-1"><EnemyShipIcon className="h-5 w-5 text-red-400 mb-1"/><span className="text-xs sm:text-sm font-bold">{counts.ships}</span><span className="text-[9px] sm:text-[10px] uppercase text-red-400/80">{t('hostiles')}</span></div>
+             <div className="flex flex-col items-center flex-1 min-w-0 px-1"><span className="text-xs sm:text-sm font-bold">{score}</span><span className="text-[9px] sm:text-[10px] uppercase text-green-400/80">{t('score')}</span></div>
+             <div className="flex flex-col items-center flex-1 min-w-0 px-1"><span className="text-xs sm:text-sm font-bold">{highScore}</span><span className="text-[9px] sm:text-[10px] uppercase text-yellow-400/80">{t('highScore')}</span></div>
           </div>
           <div className="w-full h-[1px] bg-cyan-500/30"></div>
           <div className="flex items-center justify-center flex-wrap gap-x-2 md:gap-x-4 gap-y-2 w-full">
-            <button onClick={handleQuantumLeap} disabled={gameState !== GameState.IDLE} className="px-3 py-2 bg-cyan-500 text-black font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center space-x-2 shadow-lg shadow-cyan-500/50 text-sm"><QuantumLeapIcon className="h-5 w-5"/><span>Leap</span></button>
-            <button onClick={fireUltraBoost} disabled={gameState !== GameState.IDLE || ultraBoostCount <= 0} className="px-3 py-2 bg-yellow-500 text-black font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center space-x-2 shadow-lg shadow-yellow-500/50 text-sm"><UltraBoostIcon className="h-5 w-5"/><span>Boost ({ultraBoostCount})</span></button>
-            <button onClick={cycleLaserColor} disabled={gameState !== GameState.IDLE} style={{ color: LASER_COLORS[laserColorIndex].color }} className="px-3 py-2 bg-gray-800 border border-gray-600 font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center space-x-2 text-sm"><LaserIcon className="h-5 w-5"/><span className="hidden sm:inline">{LASER_COLORS[laserColorIndex].name}</span></button>
-            <button onClick={togglePause} disabled={gameState !== GameState.IDLE && gameState !== GameState.PAUSED} className="px-3 py-2 bg-gray-800 border border-gray-600 font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 text-white"><span className="sr-only">Pause/Resume</span>{gameState === GameState.PAUSED ? <PlayIcon className="h-5 w-5" /> : <PauseIcon className="h-5 w-5" />}</button>
-            <button onClick={() => { playSound('uiClick'); setShowSettings(true); }} className="px-3 py-2 bg-gray-800 border border-gray-600 font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 text-white"><span className="sr-only">Settings</span><SettingsIcon className="h-5 w-5" /></button>
-            <button onClick={() => { playSound('uiClick'); setShowInstructions(true); }} className="px-3 py-2 bg-gray-800 border border-gray-600 font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 text-white"><span className="sr-only">Help</span><HelpIcon className="h-5 w-5" /></button>
+            <button onClick={handleQuantumLeap} disabled={gameState !== GameState.IDLE} className="px-3 py-2 bg-cyan-500 text-black font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center space-x-2 shadow-lg shadow-cyan-500/50 text-sm"><QuantumLeapIcon className="h-5 w-5"/><span>{t('leap')}</span></button>
+            <button onClick={fireUltraBoost} disabled={gameState !== GameState.IDLE || ultraBoostCount <= 0} className="px-3 py-2 bg-yellow-500 text-black font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center space-x-2 shadow-lg shadow-yellow-500/50 text-sm"><UltraBoostIcon className="h-5 w-5"/><span>{t('boost', {count: ultraBoostCount})}</span></button>
+            <button onClick={cycleLaserColor} disabled={gameState !== GameState.IDLE} style={{ color: localizedLaserColors[laserColorIndex].color }} className="px-3 py-2 bg-gray-800 border border-gray-600 font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center space-x-2 text-sm"><LaserIcon className="h-5 w-5"/><span className="hidden sm:inline">{localizedLaserColors[laserColorIndex].name}</span></button>
+            <button onClick={togglePause} disabled={gameState !== GameState.IDLE && gameState !== GameState.PAUSED} className="px-3 py-2 bg-gray-800 border border-gray-600 font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 text-white"><span className="sr-only">{t('pauseResume')}</span>{gameState === GameState.PAUSED ? <PlayIcon className="h-5 w-5" /> : <PauseIcon className="h-5 w-5" />}</button>
+            <button onClick={() => { playSound('uiClick'); setShowSettings(true); }} className="px-3 py-2 bg-gray-800 border border-gray-600 font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 text-white"><span className="sr-only">{t('srSettings')}</span><SettingsIcon className="h-5 w-5" /></button>
+            <button onClick={() => { playSound('uiClick'); setShowInstructions(true); }} className="px-3 py-2 bg-gray-800 border border-gray-600 font-bold uppercase tracking-wider rounded-md transition-all duration-300 transform hover:scale-105 text-white"><span className="sr-only">{t('help')}</span><HelpIcon className="h-5 w-5" /></button>
           </div>
            <div className="w-full h-[1px] bg-cyan-500/30"></div>
            <div className="flex flex-col md:flex-row items-center justify-between w-full space-y-2 md:space-y-0 md:space-x-4">
               <div className="flex items-center space-x-2 text-green-400 w-full md:w-auto"><HealthIcon className="h-5 w-5" /><div className="flex-1 h-4 bg-gray-800 border border-green-700 rounded-full overflow-hidden"><div className="h-full bg-green-500 transition-all duration-300" style={{width: `${(playerHealth / MAX_PLAYER_HEALTH) * 100}%`}}></div></div></div>
-              <div className="text-center w-full md:w-36 flex-shrink-0"><p className="text-xs text-white truncate">{statusMessage}</p><div className="h-1 w-full bg-cyan-900/50 mt-1 rounded-full overflow-hidden"><div className={`h-1 bg-cyan-400 transition-all duration-300 ${gameState === GameState.IDLE || gameState === GameState.PAUSED ? 'w-full' : 'w-0'}`}></div></div><span className="text-[10px] uppercase text-cyan-400/80">System Status</span></div>
+              <div className="text-center w-full md:w-36 flex-shrink-0"><p className="text-xs text-white truncate">{statusMessage}</p><div className="h-1 w-full bg-cyan-900/50 mt-1 rounded-full overflow-hidden"><div className={`h-1 bg-cyan-400 transition-all duration-300 ${gameState === GameState.IDLE || gameState === GameState.PAUSED ? 'w-full' : 'w-0'}`}></div></div><span className="text-[10px] uppercase text-cyan-400/80">{t('systemStatus')}</span></div>
            </div>
         </div>
         <div className="text-center text-xs text-gray-500 mt-2">
-            (C) Noam Gold AI 2025 | <a href="mailto:gold.noam@gmail.com" className="hover:text-cyan-400 transition-colors">Send Feedback</a>
+            {t('copyright')} <a href="mailto:gold.noam@gmail.com" className="hover:text-cyan-400 transition-colors">{t('sendFeedback')}</a>
         </div>
       </footer>
     </div>

@@ -3,12 +3,13 @@ import { ShipType } from "./types";
 export const CELESTIAL_OBJECT_COUNT = 500;
 export const STAR_COLORS = ["#FFFFFF", "#FFF8E7", "#D4E8FF", "#FFD4D4"];
 export const LASER_COLORS = [
-    { name: 'Cyan', color: 'cyan' },
-    { name: 'Red', color: 'red' },
-    { name: 'Green', color: 'lime' },
+    { nameKey: 'laserCyan', color: 'cyan' },
+    { nameKey: 'laserRed', color: 'red' },
+    { nameKey: 'laserGreen', color: 'lime' },
 ];
 export const HIGH_SCORE_KEY = 'us-spagettini-high-score';
 export const AUDIO_VOLUME_KEY = 'us-spagettini-volume';
+export const LANGUAGE_KEY = 'us-spagettini-language';
 export const HEALTH_REWARD = 10;
 export const BOOST_REWARD = 1;
 export const ENEMY_SCORES: Record<ShipType, number> = {
