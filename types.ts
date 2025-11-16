@@ -27,7 +27,22 @@ export interface Asteroid {
   size: number;
 }
 
-export type CelestialObject = Star | EnemyShip | Asteroid;
+export interface HeartStar {
+  type: 'heart_star';
+  id: string;
+  coordinates: [number, number];
+  size: number;
+}
+
+export interface BoostStar {
+  type: 'boost_star';
+  id: string;
+  coordinates: [number, number];
+  size: number;
+}
+
+
+export type CelestialObject = Star | EnemyShip | Asteroid | HeartStar | BoostStar;
 
 
 export interface GalaxyInfo {

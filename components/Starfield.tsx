@@ -115,6 +115,14 @@ const Starfield: React.FC<StarfieldProps> = ({ celestialObjects, onTargetClick, 
             <stop offset="0%" stopColor="#87CEEB" />
             <stop offset="100%" stopColor="#00BFFF" stopOpacity="0" />
         </radialGradient>
+        <radialGradient id="heartGlow">
+            <stop offset="0%" stopColor="#FF85B2" />
+            <stop offset="100%" stopColor="#FFC0CB" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="boostGlow">
+            <stop offset="0%" stopColor="#FFD700" />
+            <stop offset="100%" stopColor="#FFFF00" stopOpacity="0" />
+        </radialGradient>
       </defs>
       <g>
         {celestialObjects.map((target) => {
@@ -128,56 +136,60 @@ const Starfield: React.FC<StarfieldProps> = ({ celestialObjects, onTargetClick, 
             return null;
           }
           
-          const getAsteroidPath = () => {
-              const s = target.size * 2;
-              return `M${s*0},${s*(-1)} L${s*0.87},${s*(-0.5)} L${s*0.87},${s*0.5} L${s*0},${s*1} L${s*(-0.87)},${s*0.5} L${s*(-0.87)},${s*(-0.5)} Z`;
+          let element: React.ReactElement | null = null;
+
+          switch (target.type) {
+            case 'star':
+              element = (
+                <g>
+                  <circle r={target.size * 2} fill="url(#starGlow)" className="opacity-50 group-hover:opacity-100 transition-opacity" />
+                  <circle r={target.size} fill={target.color} />
+                </g>
+              );
+              break;
+            case 'ship':
+              const details = getShipDetails(target);
+              const isMk2 = target.shipType.includes('mk2');
+              element = (
+                <g style={{filter: 'url(#enemyGlow)'}}>
+                  <path d={details.engine} fill="url(#engineGlow)" className="engine-pulse" />
+                  <path d={details.path} fill={isMk2 ? "#9A2A2A" : "#C32020"} stroke={isMk2 ? "#FF8C8C" : "#FF6969"} strokeWidth="0.5" className="group-hover:fill-red-400 transition-colors" />
+                  <circle cx={0} cy={details.light.cy} r={details.light.r} fill="white" className="light-blink" />
+                </g>
+              );
+              break;
+            case 'asteroid':
+              const sAst = target.size * 2;
+              element = <path d={`M${sAst*0},${sAst*(-1)} L${sAst*0.87},${sAst*(-0.5)} L${sAst*0.87},${sAst*0.5} L${sAst*0},${sAst*1} L${sAst*(-0.87)},${sAst*0.5} L${sAst*(-0.87)},${sAst*(-0.5)} Z`} fill="#8B4513" stroke="#A0522D" strokeWidth="0.5" className="group-hover:fill-yellow-700 transition-colors" />;
+              break;
+            case 'heart_star':
+                const sHeart = target.size * 1.5;
+                element = (
+                    <g className="heart-pulse">
+                        <circle r={sHeart * 2} fill="url(#heartGlow)" className="opacity-70 group-hover:opacity-100 transition-opacity" />
+                        <path d={`M0,${-sHeart*0.5} C ${sHeart},${-sHeart*2} ${sHeart*2},${-sHeart*1.5} 0,${sHeart*1.5} C ${-sHeart*2},${-sHeart*1.5} ${-sHeart},${-sHeart*2} 0,${-sHeart*0.5} Z`} fill="#FF1493" stroke="#FF85B2" strokeWidth="0.5" />
+                    </g>
+                )
+                break;
+            case 'boost_star':
+                const sBoost = target.size;
+                const starPath = `M0,${-sBoost*2} L${sBoost*0.5},${-sBoost*0.5} L${sBoost*2},0 L${sBoost*0.5},${sBoost*0.5} L0,${sBoost*2} L${-sBoost*0.5},${sBoost*0.5} L${-sBoost*2},0 L${-sBoost*0.5},${-sBoost*0.5} Z`;
+                element = (
+                    <g>
+                        <circle r={sBoost * 2.5} fill="url(#boostGlow)" className="opacity-80 group-hover:opacity-100 transition-opacity" />
+                        <path d={starPath} fill="#FFD700" stroke="#FFFF00" strokeWidth="0.5" />
+                    </g>
+                );
+                break;
           }
+
+          if (!element) return null;
 
           const targetGroup = (
             <g transform={`translate(${projected[0]}, ${projected[1]})`} 
                className="cursor-pointer group"
                onClick={(e) => { e.stopPropagation(); onTargetClick(target, projected); }}>
-              {target.type === 'star' ? (
-                <>
-                  <circle r={target.size * 2} fill="url(#starGlow)" className="opacity-50 group-hover:opacity-100 transition-opacity" />
-                  <circle r={target.size} fill={target.color} />
-                </>
-              ) : target.type === 'ship' ? (() => {
-                  const details = getShipDetails(target);
-                  const isMk2 = target.shipType.includes('mk2');
-                  return (
-                    <g style={{filter: 'url(#enemyGlow)'}}>
-                        <path 
-                            d={details.engine}
-                            fill="url(#engineGlow)"
-                            className="engine-pulse"
-                        />
-                        <path 
-                          d={details.path}
-                          fill={isMk2 ? "#9A2A2A" : "#C32020"}
-                          stroke={isMk2 ? "#FF8C8C" : "#FF6969"}
-                          strokeWidth="0.5"
-                          className="group-hover:fill-red-400 transition-colors"
-                        />
-                        <circle 
-                            cx={0} 
-                            cy={details.light.cy} 
-                            r={details.light.r} 
-                            fill="white" 
-                            className="light-blink"
-                        />
-                    </g>
-                  )
-                })()
-              : ( // Asteroid
-                 <path
-                    d={getAsteroidPath()}
-                    fill="#8B4513"
-                    stroke="#A0522D"
-                    strokeWidth="0.5"
-                    className="group-hover:fill-yellow-700 transition-colors"
-                 />
-              )}
+              {element}
             </g>
           );
 
