@@ -61,6 +61,21 @@
       .player-hit-flash {
         animation: player-hit-flash 0.3s ease-out forwards;
       }
+      @keyframes engine-pulse {
+        0%, 100% { opacity: 0.7; transform: scaleY(1); }
+        50% { opacity: 1; transform: scaleY(1.2); }
+      }
+      .engine-pulse {
+        animation: engine-pulse 1.5s ease-in-out infinite;
+        transform-origin: bottom;
+      }
+      @keyframes light-blink {
+        0%, 100% { fill-opacity: 0.5; }
+        50% { fill-opacity: 1; }
+      }
+      .light-blink {
+        animation: light-blink 2s ease-in-out infinite;
+      }
     </style>
   <script type="importmap">
 {

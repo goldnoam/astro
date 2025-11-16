@@ -6,7 +6,8 @@ export interface Star {
   color: string;
 }
 
-export type ShipType = 'fighter' | 'interceptor' | 'cruiser' | 'bomber' | 'dreadnought';
+export type ShipType = 'fighter' | 'interceptor' | 'cruiser' | 'bomber' | 'dreadnought' |
+                       'fighter-mk2' | 'interceptor-mk2' | 'cruiser-mk2' | 'bomber-mk2' | 'dreadnought-mk2';
 
 export interface EnemyShip {
   type: 'ship';

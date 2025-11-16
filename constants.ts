@@ -13,5 +13,10 @@ export const ENEMY_SCORES: Record<ShipType, number> = {
     interceptor: 15,
     cruiser: 25,
     bomber: 50,
-    dreadnought: 100
+    dreadnought: 100,
+    'fighter-mk2': 20,
+    'interceptor-mk2': 30,
+    'cruiser-mk2': 50,
+    'bomber-mk2': 100,
+    'dreadnought-mk2': 200,
 };

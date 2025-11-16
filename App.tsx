@@ -10,7 +10,7 @@ const MAX_PLAYER_HEALTH = 100;
 const ENEMY_LASER_DAMAGE = 5;
 const MAX_SHIPS = 25;
 
-const generateCelestialObjects = (): CelestialObject[] => {
+const generateCelestialObjects = (level: number): CelestialObject[] => {
   let shipCount = 0;
   return Array.from({ length: CELESTIAL_OBJECT_COUNT }, (_, i) => {
     const typeRand = Math.random();
@@ -26,25 +26,27 @@ const generateCelestialObjects = (): CelestialObject[] => {
       let size: number;
       let movementPattern: EnemyShip['movementPattern'] = 'static';
       let velocity: [number, number] = [0, 0];
+      
+      const useMk2Ships = level > 1;
 
       if (rand < 0.4) { 
-        shipType = 'fighter'; 
+        shipType = useMk2Ships ? 'fighter-mk2' : 'fighter'; 
         size = Math.random() * 0.5 + 0.8;
         movementPattern = 'strafe';
         velocity = [(Math.random() - 0.5) * 0.4, 0];
       } else if (rand < 0.6) { 
-        shipType = 'interceptor'; 
+        shipType = useMk2Ships ? 'interceptor-mk2' : 'interceptor'; 
         size = Math.random() * 0.4 + 0.7;
         movementPattern = 'strafe';
         velocity = [0, (Math.random() - 0.5) * 0.4];
       } else if (rand < 0.8) { 
-        shipType = 'cruiser'; 
+        shipType = useMk2Ships ? 'cruiser-mk2' : 'cruiser'; 
         size = Math.random() * 0.6 + 1.2;
       } else if (rand < 0.95) { 
-        shipType = 'bomber'; 
+        shipType = useMk2Ships ? 'bomber-mk2' : 'bomber'; 
         size = Math.random() * 0.7 + 1.5;
       } else { 
-        shipType = 'dreadnought'; 
+        shipType = useMk2Ships ? 'dreadnought-mk2' : 'dreadnought'; 
         size = Math.random() * 0.8 + 2.0;
       }
 
@@ -85,6 +87,7 @@ const App: React.FC = () => {
   const [isAutoAimActive, setIsAutoAimActive] = useState(false);
   const [isPlayerHit, setIsPlayerHit] = useState(false);
   const [ultraBoostCount, setUltraBoostCount] = useState(5);
+  const [level, setLevel] = useState(1);
   
   const projectionRef = useRef<GeoProjection>(geoOrthographic());
   const shipPosition = useMemo(() => [window.innerWidth / 2, window.innerHeight], []);
@@ -95,30 +98,44 @@ const App: React.FC = () => {
       asteroids: celestialObjects.filter(o => o.type === 'asteroid').length
   }), [celestialObjects]);
 
-
-  const setupNewGalaxy = useCallback(async (isRestart = false) => {
+  const setupNewGalaxy = useCallback(async (levelToGenerate: number, isRestart = false) => {
     setGameState(GameState.GENERATING);
     setCelestialObjects([]);
     setGalaxyInfo(null);
-    setScore(0);
-    setPlayerHealth(MAX_PLAYER_HEALTH);
-    setIsAutoAimActive(false);
     setEnemyLasers([]);
-    setUltraBoostCount(5);
-    if (isRestart) setShowInstructions(false);
+
+    if (isRestart) {
+      setLevel(1);
+      setScore(0);
+      setPlayerHealth(MAX_PLAYER_HEALTH);
+      setIsAutoAimActive(false);
+      setUltraBoostCount(5);
+      setShowInstructions(false);
+    } else {
+      setLevel(levelToGenerate);
+    }
 
     const info = await generateGalaxyInfo();
     setGalaxyInfo(info);
-    setCelestialObjects(generateCelestialObjects());
+    setCelestialObjects(generateCelestialObjects(levelToGenerate));
     setGameState(GameState.IDLE);
   }, []);
 
   useEffect(() => {
     const storedHighScore = localStorage.getItem(HIGH_SCORE_KEY);
     if (storedHighScore) setHighScore(parseInt(storedHighScore, 10));
-    setupNewGalaxy();
+    setupNewGalaxy(1, true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (counts.ships === 0 && gameState === GameState.IDLE && celestialObjects.length > 0 && galaxyInfo !== null) {
+      setGameState(GameState.LEAPING);
+      setTimeout(() => {
+          setupNewGalaxy(level + 1, false);
+      }, 2000);
+    }
+  }, [counts.ships, gameState, celestialObjects.length, galaxyInfo, level, setupNewGalaxy]);
   
   useEffect(() => {
       if (playerHealth <= 0 && gameState !== GameState.GAME_OVER) {
@@ -147,7 +164,7 @@ const App: React.FC = () => {
 
       setTimeout(() => {
           setEnemyLasers(prev => prev.filter(l => l.id !== id));
-          if(gameState !== GameState.LEAPING) {
+          if(gameState !== GameState.LEAPING && gameState !== GameState.GENERATING) {
               setPlayerHealth(h => Math.max(0, h - ENEMY_LASER_DAMAGE));
               setIsPlayerHit(true);
               setTimeout(() => setIsPlayerHit(false), 300);
@@ -169,11 +186,9 @@ const App: React.FC = () => {
                     let newLon = lon + dLon;
                     const newLat = lat + dLat;
                     
-                    // Wrap around longitude
                     if (newLon > 180) newLon = -180 + (newLon - 180);
                     if (newLon < -180) newLon = 180 + (newLon + 180);
                     
-                    // Simple bounce on latitude for strafing
                     let newVel = obj.velocity;
                     if (newLat > 85 || newLat < -85) {
                         newVel = [dLon, -dLat];
@@ -192,15 +207,24 @@ const App: React.FC = () => {
   const handleQuantumLeap = useCallback(async () => {
     if (gameState !== GameState.IDLE) return;
     setGameState(GameState.LEAPING);
-    setTimeout(() => { setupNewGalaxy(true); }, 1500);
-  }, [gameState, setupNewGalaxy]);
+    setTimeout(async () => {
+      setGameState(GameState.GENERATING);
+      const info = await generateGalaxyInfo();
+      setGalaxyInfo(info);
+      setCelestialObjects(generateCelestialObjects(level));
+      setGameState(GameState.IDLE);
+    }, 1500);
+  }, [gameState, level]);
 
   const destroyTarget = useCallback((target: CelestialObject, screenPos: [number, number]) => {
       const getExplosionSizeMultiplier = () => {
           if (target.type === 'star') return 1; if (target.type === 'asteroid') return 0.8;
           switch (target.shipType) {
             case 'fighter': return 2; case 'interceptor': return 1.8; case 'cruiser': return 4;
-            case 'bomber': return 6; case 'dreadnought': return 8; default: return 1;
+            case 'bomber': return 6; case 'dreadnought': return 8;
+            case 'fighter-mk2': return 2.5; case 'interceptor-mk2': return 2.2; case 'cruiser-mk2': return 5;
+            case 'bomber-mk2': return 7; case 'dreadnought-mk2': return 10;
+            default: return 1;
           }
         };
 
@@ -324,22 +348,22 @@ const App: React.FC = () => {
       case GameState.FIRING: return 'Weapons active!';
       case GameState.PAUSED: return 'System Paused.';
       case GameState.GAME_OVER: return 'MISSION FAILED.';
-      case GameState.IDLE: return 'Awaiting command.';
+      case GameState.IDLE: return counts.ships > 0 ? 'Awaiting command.' : 'Sector clear! Advancing...';
       default: return 'Standby.';
     }
-  }, [gameState]);
+  }, [gameState, counts.ships]);
 
   return (
     <div className={`h-screen w-screen bg-black overflow-hidden relative font-mono ${isPlayerHit ? 'screen-shake' : ''}`}>
-      {gameState === GameState.GAME_OVER && <Modal title="Mission Failed" onClose={() => {}} actions={<button onClick={() => setupNewGalaxy(true)} className="w-full bg-green-500 text-black font-bold py-2 rounded-lg hover:bg-green-400 transition-colors">Restart Mission</button>}>
-          <p>Your ship has been destroyed. Your final score was <strong className="text-green-400">{score}</strong>.</p>
+      {gameState === GameState.GAME_OVER && <Modal title="Mission Failed" onClose={() => {}} actions={<button onClick={() => setupNewGalaxy(1, true)} className="w-full bg-green-500 text-black font-bold py-2 rounded-lg hover:bg-green-400 transition-colors">Restart Mission</button>}>
+          <p>Your ship has been destroyed. Your final score was <strong className="text-green-400">{score}</strong> on level <strong className="text-cyan-400">{level}</strong>.</p>
         </Modal>}
       {showInstructions && <Modal title="Commander's Briefing" onClose={() => setShowInstructions(false)}>
           <ul className="space-y-3">
+            <li><strong className="text-cyan-400">Objective:</strong> Clear all hostile ships to advance to the next level.</li>
             <li><strong className="text-cyan-400">Rotate/Zoom:</strong> Click & drag / mouse wheel.</li>
             <li><strong className="text-cyan-400">Fire:</strong> Click on a target. (Disabled when Auto-Aim is on).</li>
             <li><strong className="text-cyan-400">Ultra-Boost:</strong> Destroys all visible hostiles. Limited charges.</li>
-            <li><strong className="text-cyan-400">Enemy Movement:</strong> Smaller ships perform evasive maneuvers.</li>
           </ul>
         </Modal>}
       {showSettings && <Modal title="Settings" onClose={() => setShowSettings(false)}>
@@ -383,7 +407,7 @@ const App: React.FC = () => {
       </svg>
       
       <header className="absolute top-0 left-0 p-4 md:p-6 text-cyan-300 pointer-events-none w-full flex justify-between items-start">
-        <div><h1 className="text-xl md:text-3xl font-bold tracking-widest uppercase">U.S. Spagettini</h1><p className="text-sm md:text-base text-white/80">Starship Commander Interface</p></div>
+        <div><h1 className="text-xl md:text-3xl font-bold tracking-widest uppercase">U.S. Spagettini</h1><p className="text-sm md:text-base text-white/80">Level: {level}</p></div>
         <div className='text-right'><p className="text-lg md:text-xl font-semibold">{galaxyInfo ? galaxyInfo.name : 'Scanning...'}</p><p className="text-xs md:text-sm max-w-xs text-white/70 italic">{galaxyInfo ? galaxyInfo.description : ''}</p></div>
       </header>
       
