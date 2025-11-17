@@ -383,6 +383,8 @@ const App: React.FC = () => {
     }
   }, [gameState, counts.ships, t]);
 
+  const isGamePaused = gameState === GameState.PAUSED || showInstructions || showSettings || gameState === GameState.GAME_OVER;
+
   return (
     <div dir={dir} className={`h-screen w-screen bg-black overflow-hidden relative font-mono ${isPlayerHit ? 'screen-shake' : ''}`}>
       {gameState === GameState.GAME_OVER && <Modal title={t('missionFailed')} onClose={() => {}} closeText={t('close')} actions={<button onClick={() => { playSound('uiClick'); setupNewGalaxy(1, true); }} className="w-full bg-green-500 text-black font-bold py-2 rounded-lg hover:bg-green-400 transition-colors">{t('restartMission')}</button>}>
@@ -433,7 +435,7 @@ const App: React.FC = () => {
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20"></div>
       {isPlayerHit && <div className="absolute inset-0 bg-red-800/80 pointer-events-none z-50 player-hit-flash" />}
       
-      <Starfield celestialObjects={celestialObjects} onTargetClick={fireOnTarget} isLeaping={gameState === GameState.LEAPING} isPaused={gameState === GameState.PAUSED} projection={projectionRef.current}/>
+      <Starfield celestialObjects={celestialObjects} onTargetClick={fireOnTarget} isLeaping={gameState === GameState.LEAPING} isPaused={isGamePaused} projection={projectionRef.current}/>
 
       <svg width="100%" height="100%" className="absolute inset-0 pointer-events-none">
         {laser && <line x1={laser.from[0]} y1={laser.from[1]} x2={laser.to[0]} y2={laser.to[1]} stroke={laser.color} strokeWidth="3" className="laser-beam" strokeLinecap="round" />}

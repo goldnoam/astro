@@ -15,6 +15,7 @@ const Starfield: React.FC<StarfieldProps> = ({ celestialObjects, onTargetClick, 
   const animationFrameId = useRef<number>();
   const [isDragging, setIsDragging] = useState(false);
   const [, forceRender] = useState(0);
+  const pressedKeys = useRef(new Set<string>());
 
   const memoizedForceRender = useCallback(() => forceRender(c => c + 1), []);
   
@@ -55,15 +56,57 @@ const Starfield: React.FC<StarfieldProps> = ({ celestialObjects, onTargetClick, 
         projection.scale(newScale);
         memoizedForceRender();
     };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+        event.preventDefault();
+        pressedKeys.current.add(event.key);
+      }
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+        event.preventDefault();
+        pressedKeys.current.delete(event.key);
+      }
+    };
     
     const svgNode = svgRef.current;
     svgNode?.addEventListener('wheel', handleWheel, { passive: false });
     window.addEventListener('resize', resize);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
     
     const animate = () => {
         if (!document.hidden && !isDragging && !isPaused) {
             const rotate = projection.rotate();
-            projection.rotate([rotate[0] + 0.015, rotate[1], rotate[2]]);
+            let [lon, lat, roll] = rotate;
+            let userRotated = false;
+            const rotationSpeed = 0.5;
+
+            if (pressedKeys.current.has('ArrowLeft')) {
+                lon -= rotationSpeed;
+                userRotated = true;
+            }
+            if (pressedKeys.current.has('ArrowRight')) {
+                lon += rotationSpeed;
+                userRotated = true;
+            }
+            if (pressedKeys.current.has('ArrowUp')) {
+                lat += rotationSpeed;
+                userRotated = true;
+            }
+            if (pressedKeys.current.has('ArrowDown')) {
+                lat -= rotationSpeed;
+                userRotated = true;
+            }
+
+            if (userRotated) {
+                projection.rotate([lon, lat, roll]);
+            } else {
+                // Passive rotation only when user is not rotating
+                projection.rotate([rotate[0] + 0.015, rotate[1], rotate[2]]);
+            }
+            
             memoizedForceRender();
         }
         animationFrameId.current = requestAnimationFrame(animate);
@@ -73,6 +116,8 @@ const Starfield: React.FC<StarfieldProps> = ({ celestialObjects, onTargetClick, 
     return () => {
       svgNode?.removeEventListener('wheel', handleWheel);
       window.removeEventListener('resize', resize);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
       svg.on('.drag', null);
       if (animationFrameId.current) {
         cancelAnimationFrame(animationFrameId.current);
