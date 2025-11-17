@@ -185,7 +185,7 @@ const App: React.FC = () => {
               setPlayerHealth(h => Math.max(0, h - ENEMY_LASER_DAMAGE));
               setIsPlayerHit(true);
               playSound('explosionPlayer');
-              setTimeout(() => setIsPlayerHit(false), 300);
+              setTimeout(() => setIsPlayerHit(false), 500);
           }
       }, 1000);
     }, 2500 - Math.min(1800, counts.ships * 50));

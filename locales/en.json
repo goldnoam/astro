@@ -43,5 +43,6 @@
   "sendFeedback": "Send Feedback",
   "laserCyan": "Cyan",
   "laserRed": "Red",
-  "laserGreen": "Lime"
+  "laserGreen": "Lime",
+  "laserYellow": "Yellow"
 }

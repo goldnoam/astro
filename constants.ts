@@ -6,6 +6,7 @@ export const LASER_COLORS = [
     { nameKey: 'laserCyan', color: 'cyan' },
     { nameKey: 'laserRed', color: 'red' },
     { nameKey: 'laserGreen', color: 'lime' },
+    { nameKey: 'laserYellow', color: 'yellow' },
 ];
 export const HIGH_SCORE_KEY = 'us-spagettini-high-score';
 export const AUDIO_VOLUME_KEY = 'us-spagettini-volume';
